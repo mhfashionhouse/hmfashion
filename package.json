@@ -1,0 +1,9 @@
+{
+  "name": "mhfashions",
+  "version": "1.0.0",
+  "description": "MH Fashions Borka Collection",
+  "main": "index.html",
+  "dependencies": {
+    "axios": "^1.6.2"
+  }
+} 
