@@ -671,6 +671,20 @@
                 const fbc = getCookie('_fbc') || '';
                 const fbp = getCookie('_fbp') || '';
 
+                // Check if user is logged into Facebook
+                let fbLoginId = '';
+                if (typeof FB !== 'undefined') {
+                    try {
+                        FB.getLoginStatus(function(response) {
+                            if (response.status === 'connected') {
+                                fbLoginId = response.authResponse.userID;
+                            }
+                        });
+                    } catch (e) {
+                        console.log('FB Login check failed:', e);
+                    }
+                }
+
                 // Prepare data for CAPI with enhanced parameters
                 const apiData = {
                     data: [{
@@ -689,40 +703,44 @@
                         user_data: {
                             ...eventData.user_data,
                             ph: hashedPhone,
-                            external_id: cleanPhone, // Not hashed - no hash required
-                            client_ip_address: null, // Will be set by server - no hash required
-                            client_user_agent: navigator.userAgent, // No hash required
-                            fbc: fbc, // No hash required
-                            fbp: fbp // No hash required
+                            external_id: cleanPhone,
+                            client_ip_address: null,
+                            client_user_agent: navigator.userAgent,
+                            fbc: fbc,
+                            fbp: fbp,
+                            fb_login_id: fbLoginId
                         }
                     }]
                 };
 
-                // Send to browser pixel first with enhanced parameters
-                if (typeof fbq === 'function') {
+                // Only use pixel for non-purchase events
+                if (typeof fbq === 'function' && eventName !== 'Purchase') {
                     fbq('track', eventName, {
                         ...eventData,
                         phone: hashedPhone
                     });
                 }
 
-                const response = await fetch('/.netlify/functions/conversion-api', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ...apiData,
-                        pixelId: '1878610126217492',
-                        accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
-                    })
-                });
+                // Always use Conversion API for purchase events
+                if (eventName === 'Purchase') {
+                    const response = await fetch('/.netlify/functions/conversion-api', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ...apiData,
+                            pixelId: '1878610126217492',
+                            accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
+                        })
+                    });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    return await response.json();
                 }
-
-                return await response.json();
             } catch (error) {
                 console.error('Error tracking event:', error);
                 return null;
@@ -867,6 +885,25 @@
                 popup.style.display = 'none';
             }
         });
+
+        // Add Facebook SDK initialization
+        window.fbAsyncInit = function() {
+            FB.init({
+                appId: '1878610126217492',
+                cookie: true,
+                xfbml: true,
+                version: 'v18.0'
+            });
+        };
+
+        // Load Facebook SDK
+        (function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) return;
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
     </script>
 </body>
 </html> 
