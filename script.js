@@ -1,4 +1,12 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Helper function to get cookie value
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
     // Get all product items
     const productItems = document.querySelectorAll('.product-item');
     
@@ -23,11 +31,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 return; // Skip if this exact event was already tracked
             }
             
+            // Get Facebook IDs and parameters
+            const fbc = getCookie('_fbc') || '';
+            const fbp = getCookie('_fbp') || '';
+            const fbLoginId = localStorage.getItem('fb_login_id');
+            
             // Ensure required parameters are present
             const eventParams = {
                 currency: 'BDT',
-                ...params
+                ...params,
+                // Add Facebook identifiers
+                fb_login_id: fbLoginId || undefined,
+                fbc: fbc || undefined,
+                fbp: fbp || undefined
             };
+            
+            // Clean up undefined values
+            Object.keys(eventParams).forEach(key => 
+                eventParams[key] === undefined && delete eventParams[key]
+            );
             
             // Validate and format value parameter
             if (eventParams.value) {
@@ -462,6 +484,85 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Track Purchase event on form submission
+    async function trackEvent(eventName, eventData) {
+        try {
+            // Get form data for enhanced matching
+            const form = document.getElementById('orderForm');
+            const phone = form ? form.querySelector('input[name="phone"]')?.value : '';
+            
+            // Clean and hash the phone number
+            const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+            const hashedPhone = cleanPhone ? await sha256(cleanPhone) : undefined;
+
+            // Get Facebook click ID (fbc) and browser ID (fbp)
+            const fbc = getCookie('_fbc') || '';
+            const fbp = getCookie('_fbp') || '';
+
+            // Generate a unique event ID for deduplication
+            const eventId = `${eventName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            // Prepare data for CAPI with enhanced parameters
+            const apiData = {
+                data: [{
+                    event_name: eventName,
+                    event_time: Math.floor(Date.now() / 1000),
+                    action_source: "website",
+                    event_source_url: window.location.href,
+                    event_id: eventId, // Add event_id for deduplication
+                    custom_data: {
+                        currency: eventData.currency,
+                        value: eventData.value,
+                        contents: eventData.contents,
+                        content_type: eventData.content_type,
+                        delivery_category: 'home_delivery',
+                        shipping_cost: eventData.shipping_cost
+                    },
+                    user_data: {
+                        ...eventData.user_data,
+                        ph: hashedPhone,
+                        external_id: cleanPhone,
+                        client_ip_address: null,
+                        client_user_agent: navigator.userAgent,
+                        fbc: fbc,
+                        fbp: fbp
+                    }
+                }]
+            };
+
+            // Only send to Pixel if it's a Purchase event
+            if (typeof fbq === 'function' && eventName === 'Purchase') {
+                fbq('track', eventName, {
+                    ...eventData,
+                    phone: hashedPhone,
+                    event_id: eventId // Add event_id to pixel event
+                });
+            }
+
+            // Send to Conversion API
+            const response = await fetch('/.netlify/functions/conversion-api', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...apiData,
+                    pixelId: '1878610126217492',
+                    accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error tracking event:', error);
+            return null;
+        }
+    }
+
     // Form submission
     orderForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -719,4 +820,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial validation
     validateForm();
+
+    // Add function to get Facebook Login ID
+    async function getFacebookLoginId() {
+        try {
+            // Try to get Facebook Login ID from cookie or localStorage
+            const fbLoginId = localStorage.getItem('fb_login_id') || getCookie('fb_login_id');
+            if (fbLoginId) return fbLoginId;
+
+            // If not found, try to get it from Facebook API
+            if (typeof FB !== 'undefined' && FB.getLoginStatus) {
+                const response = await new Promise((resolve) => {
+                    FB.getLoginStatus(function(response) {
+                        resolve(response);
+                    });
+                });
+                
+                if (response.status === 'connected') {
+                    const loginId = response.authResponse.userID;
+                    // Store for future use
+                    localStorage.setItem('fb_login_id', loginId);
+                    return loginId;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting Facebook Login ID:', error);
+            return null;
+        }
+    }
 });
