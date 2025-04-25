@@ -32,6 +32,12 @@
     // Track PageView
     fbq('track', 'PageView');
     
+    // Test ViewContent event
+    fbq('track', 'ViewContent', {
+        content_type: 'product_group',
+        content_name: 'বোরকা কালেকশন'
+    });
+    
     // Add SHA256 hashing function
     async function sha256(text) {
         const msgBuffer = new TextEncoder().encode(text);
@@ -40,6 +46,9 @@
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         return hashHex;
     }
+
+    // Log when pixel is loaded
+    fbq('trackCustom', 'PixelLoaded', { timestamp: new Date().toISOString() });
     </script>
     <noscript>
         <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1878610126217492&ev=PageView&noscript=1"/>

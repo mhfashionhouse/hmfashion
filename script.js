@@ -70,11 +70,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // For all events except Purchase, use pixel tracking
+            // Track all events through pixel EXCEPT Purchase
+            // Purchase will be handled by Conversion API only
             if (eventName !== 'Purchase') {
-                console.log(`Tracking ${eventName} event with params:`, eventParams);
                 fbq('track', eventName, eventParams);
                 trackedEvents.add(eventKey);
+                console.log(`Tracked ${eventName} event via pixel`, eventParams);
             }
         } catch (error) {
             console.error('Error tracking FB event:', error);
