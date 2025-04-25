@@ -1,4 +1,12 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Helper function to get cookie value
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
     // Get all product items
     const productItems = document.querySelectorAll('.product-item');
     
@@ -23,11 +31,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 return; // Skip if this exact event was already tracked
             }
             
+            // Get Facebook IDs and parameters
+            const fbc = getCookie('_fbc') || '';
+            const fbp = getCookie('_fbp') || '';
+            const fbLoginId = localStorage.getItem('fb_login_id');
+            
             // Ensure required parameters are present
             const eventParams = {
                 currency: 'BDT',
-                ...params
+                ...params,
+                // Add Facebook identifiers
+                fb_login_id: fbLoginId || undefined,
+                fbc: fbc || undefined,
+                fbp: fbp || undefined
             };
+            
+            // Clean up undefined values
+            Object.keys(eventParams).forEach(key => 
+                eventParams[key] === undefined && delete eventParams[key]
+            );
             
             // Validate and format value parameter
             if (eventParams.value) {
@@ -48,8 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            fbq('track', eventName, eventParams);
-            trackedEvents.add(eventKey);
+            // Skip pixel tracking for Purchase events to avoid duplication
+            if (eventName !== 'Purchase') {
+                fbq('track', eventName, eventParams);
+                trackedEvents.add(eventKey);
+            }
         } catch (error) {
             console.error('Error tracking FB event:', error);
         }
@@ -719,4 +744,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial validation
     validateForm();
+
+    // Add function to get Facebook Login ID
+    async function getFacebookLoginId() {
+        try {
+            // Try to get Facebook Login ID from cookie or localStorage
+            const fbLoginId = localStorage.getItem('fb_login_id') || getCookie('fb_login_id');
+            if (fbLoginId) return fbLoginId;
+
+            // If not found, try to get it from Facebook API
+            if (typeof FB !== 'undefined' && FB.getLoginStatus) {
+                const response = await new Promise((resolve) => {
+                    FB.getLoginStatus(function(response) {
+                        resolve(response);
+                    });
+                });
+                
+                if (response.status === 'connected') {
+                    const loginId = response.authResponse.userID;
+                    // Store for future use
+                    localStorage.setItem('fb_login_id', loginId);
+                    return loginId;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting Facebook Login ID:', error);
+            return null;
+        }
+    }
 });

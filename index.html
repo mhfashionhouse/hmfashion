@@ -44,6 +44,35 @@
         <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1878610126217492&ev=PageView&noscript=1"/>
     </noscript>
     <!-- End Meta Pixel Code -->
+    
+    <!-- Facebook SDK -->
+    <script>
+        window.fbAsyncInit = function() {
+            FB.init({
+                appId: '1878610126217492', // Using the same ID as the pixel
+                cookie: true,
+                xfbml: true,
+                version: 'v17.0'
+            });
+
+            // Try to get Facebook Login ID on page load
+            FB.getLoginStatus(function(response) {
+                if (response.status === 'connected') {
+                    localStorage.setItem('fb_login_id', response.authResponse.userID);
+                }
+            });
+        };
+
+        // Load Facebook SDK
+        (function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) return;
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+    </script>
+    <!-- End Facebook SDK -->
 </head>
 <body>
     <!-- Update the thank you popup style -->
@@ -698,8 +727,9 @@
                     }]
                 };
 
-                // Send to browser pixel first with enhanced parameters
-                if (typeof fbq === 'function') {
+                // For Purchase events, only use Conversion API to avoid duplication
+                // For other events, use both pixel and API for redundancy
+                if (eventName !== 'Purchase' && typeof fbq === 'function') {
                     fbq('track', eventName, {
                         ...eventData,
                         phone: hashedPhone
@@ -719,6 +749,13 @@
                 });
 
                 if (!response.ok) {
+                    // If Conversion API fails, fallback to pixel for Purchase events
+                    if (eventName === 'Purchase' && typeof fbq === 'function') {
+                        fbq('track', eventName, {
+                            ...eventData,
+                            phone: hashedPhone
+                        });
+                    }
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
