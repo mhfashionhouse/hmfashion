@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function trackFBEvent(eventName, params, uniqueIdentifier = '') {
         try {
             if (typeof fbq !== 'function') {
-                console.error('Facebook Pixel not loaded');
+                console.warn('Facebook Pixel not loaded');
                 return;
             }
 
@@ -70,13 +70,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Track all events through pixel EXCEPT Purchase
-            // Purchase will be handled by Conversion API only
-            if (eventName !== 'Purchase') {
-                fbq('track', eventName, eventParams);
-                trackedEvents.add(eventKey);
-                console.log(`Tracked ${eventName} event via pixel`, eventParams);
-            }
+            fbq('track', eventName, eventParams);
+            trackedEvents.add(eventKey);
         } catch (error) {
             console.error('Error tracking FB event:', error);
         }
@@ -489,6 +484,85 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Track Purchase event on form submission
+    async function trackEvent(eventName, eventData) {
+        try {
+            // Get form data for enhanced matching
+            const form = document.getElementById('orderForm');
+            const phone = form ? form.querySelector('input[name="phone"]')?.value : '';
+            
+            // Clean and hash the phone number
+            const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+            const hashedPhone = cleanPhone ? await sha256(cleanPhone) : undefined;
+
+            // Get Facebook click ID (fbc) and browser ID (fbp)
+            const fbc = getCookie('_fbc') || '';
+            const fbp = getCookie('_fbp') || '';
+
+            // Prepare data for CAPI with enhanced parameters
+            const apiData = {
+                data: [{
+                    event_name: eventName,
+                    event_time: Math.floor(Date.now() / 1000),
+                    action_source: "website",
+                    event_source_url: window.location.href,
+                    custom_data: {
+                        currency: eventData.currency,
+                        value: eventData.value,
+                        contents: eventData.contents,
+                        content_type: eventData.content_type,
+                        delivery_category: 'home_delivery',
+                        shipping_cost: eventData.shipping_cost
+                    },
+                    user_data: {
+                        ...eventData.user_data,
+                        ph: hashedPhone,
+                        external_id: cleanPhone,
+                        client_ip_address: null,
+                        client_user_agent: navigator.userAgent,
+                        fbc: fbc,
+                        fbp: fbp
+                    }
+                }]
+            };
+
+            // For Purchase events, only use Conversion API
+            // For other events, only use browser pixel
+            if (eventName === 'Purchase') {
+                // Send only through Conversion API
+                const response = await fetch('/.netlify/functions/conversion-api', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ...apiData,
+                        pixelId: '1878610126217492',
+                        accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                return await response.json();
+            } else {
+                // For non-Purchase events, only use browser pixel
+                if (typeof fbq === 'function') {
+                    fbq('track', eventName, {
+                        ...eventData,
+                        phone: hashedPhone
+                    });
+                }
+                return true;
+            }
+        } catch (error) {
+            console.error('Error tracking event:', error);
+            return null;
+        }
+    }
+
     // Form submission
     orderForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -775,11 +849,4 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
     }
-
-    // Test pixel is working
-    console.log('Testing pixel...');
-    fbq('track', 'ViewContent', {
-        content_type: 'product_group',
-        content_name: 'বোরকা কালেকশন'
-    });
 });

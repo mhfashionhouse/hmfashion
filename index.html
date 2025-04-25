@@ -16,6 +16,15 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <!-- Meta Pixel Code -->
     <script>
+    // Add SHA256 hashing function
+    async function sha256(text) {
+        const msgBuffer = new TextEncoder().encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+    }
+
     !function(f,b,e,v,n,t,s) {
         if(f.fbq)return;
         n=f.fbq=function(){n.callMethod ? n.callMethod.apply(n,arguments) : n.queue.push(arguments)};
@@ -26,29 +35,10 @@
         s.parentNode.insertBefore(t,s)
     }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
     
-    // Initialize pixel
+    // Initialize pixel only once
     fbq('init', '1878610126217492');
-    
-    // Track PageView
+    // Track PageView only once
     fbq('track', 'PageView');
-    
-    // Test ViewContent event
-    fbq('track', 'ViewContent', {
-        content_type: 'product_group',
-        content_name: 'বোরকা কালেকশন'
-    });
-    
-    // Add SHA256 hashing function
-    async function sha256(text) {
-        const msgBuffer = new TextEncoder().encode(text);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return hashHex;
-    }
-
-    // Log when pixel is loaded
-    fbq('trackCustom', 'PixelLoaded', { timestamp: new Date().toISOString() });
     </script>
     <noscript>
         <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1878610126217492&ev=PageView&noscript=1"/>
@@ -59,13 +49,21 @@
     <script>
         window.fbAsyncInit = function() {
             FB.init({
-                appId: '1878610126217492',
+                appId: '1878610126217492', // Using the same ID as the pixel
                 cookie: true,
                 xfbml: true,
                 version: 'v17.0'
             });
+
+            // Try to get Facebook Login ID on page load
+            FB.getLoginStatus(function(response) {
+                if (response.status === 'connected') {
+                    localStorage.setItem('fb_login_id', response.authResponse.userID);
+                }
+            });
         };
 
+        // Load Facebook SDK
         (function(d, s, id) {
             var js, fjs = d.getElementsByTagName(s)[0];
             if (d.getElementById(id)) return;
@@ -686,95 +684,6 @@
         }
 
         setInterval(updateCountdown, 1000);
-
-        // Track Purchase event on form submission
-        async function trackEvent(eventName, eventData) {
-            try {
-                // Get form data for enhanced matching
-                const form = document.getElementById('orderForm');
-                const phone = form ? form.querySelector('input[name="phone"]')?.value : '';
-                
-                // Clean and hash the phone number
-                const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
-                const hashedPhone = cleanPhone ? await sha256(cleanPhone) : undefined;
-
-                // Get Facebook click ID (fbc) and browser ID (fbp)
-                const fbc = getCookie('_fbc') || '';
-                const fbp = getCookie('_fbp') || '';
-
-                // Prepare data for CAPI with enhanced parameters
-                const apiData = {
-                    data: [{
-                        event_name: eventName,
-                        event_time: Math.floor(Date.now() / 1000),
-                        action_source: "website",
-                        event_source_url: window.location.href,
-                        custom_data: {
-                            currency: eventData.currency,
-                            value: eventData.value,
-                            contents: eventData.contents,
-                            content_type: eventData.content_type,
-                            delivery_category: 'home_delivery',
-                            shipping_cost: eventData.shipping_cost
-                        },
-                        user_data: {
-                            ...eventData.user_data,
-                            ph: hashedPhone,
-                            external_id: cleanPhone, // Not hashed - no hash required
-                            client_ip_address: null, // Will be set by server - no hash required
-                            client_user_agent: navigator.userAgent, // No hash required
-                            fbc: fbc, // No hash required
-                            fbp: fbp // No hash required
-                        }
-                    }]
-                };
-
-                // For Purchase events, only use Conversion API to avoid duplication
-                // For other events, use both pixel and API for redundancy
-                if (eventName !== 'Purchase' && typeof fbq === 'function') {
-                    fbq('track', eventName, {
-                        ...eventData,
-                        phone: hashedPhone
-                    });
-                }
-
-                const response = await fetch('/.netlify/functions/conversion-api', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ...apiData,
-                        pixelId: '1878610126217492',
-                        accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
-                    })
-                });
-
-                if (!response.ok) {
-                    // If Conversion API fails, fallback to pixel for Purchase events
-                    if (eventName === 'Purchase' && typeof fbq === 'function') {
-                        fbq('track', eventName, {
-                            ...eventData,
-                            phone: hashedPhone
-                        });
-                    }
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                return await response.json();
-            } catch (error) {
-                console.error('Error tracking event:', error);
-                return null;
-            }
-        }
-
-        // Helper function to get cookies
-        function getCookie(name) {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; ${name}=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
-            return null;
-        }
 
         // Update the thank you popup function
         function showThankYouPopup() {
