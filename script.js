@@ -499,6 +499,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const fbc = getCookie('_fbc') || '';
             const fbp = getCookie('_fbp') || '';
 
+            // Generate a unique event ID for deduplication
+            const eventId = `${eventName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
             // Prepare data for CAPI with enhanced parameters
             const apiData = {
                 data: [{
@@ -506,6 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     event_time: Math.floor(Date.now() / 1000),
                     action_source: "website",
                     event_source_url: window.location.href,
+                    event_id: eventId, // Add event_id for deduplication
                     custom_data: {
                         currency: eventData.currency,
                         value: eventData.value,
@@ -526,37 +530,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 }]
             };
 
-            // For Purchase events, only use Conversion API
-            // For other events, only use browser pixel
-            if (eventName === 'Purchase') {
-                // Send only through Conversion API
-                const response = await fetch('/.netlify/functions/conversion-api', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ...apiData,
-                        pixelId: '1878610126217492',
-                        accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
-                    })
+            // Send to browser pixel with the same event_id
+            if (typeof fbq === 'function') {
+                fbq('track', eventName, {
+                    ...eventData,
+                    phone: hashedPhone,
+                    event_id: eventId // Add event_id to pixel event
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                return await response.json();
-            } else {
-                // For non-Purchase events, only use browser pixel
-                if (typeof fbq === 'function') {
-                    fbq('track', eventName, {
-                        ...eventData,
-                        phone: hashedPhone
-                    });
-                }
-                return true;
             }
+
+            // Send to Conversion API
+            const response = await fetch('/.netlify/functions/conversion-api', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...apiData,
+                    pixelId: '1878610126217492',
+                    accessToken: 'EACG8LlZAZC0ioBOy4uwdlVE9VargoXKxWErf3YYSiCHOWtxehOZCaqvz2INMagZBuN0xZCyLfkRthCpVryQXEyJZAkMuqO8WlS8Xnt0JZBWO74KE8lqO7pZCbaBfFlJJTpSgO9FI4B9PM4Cb4SEI55xAXRLhJRgTfXF6Mdw3kGCYYIJfQpCCufxKKXdeGS1M9afLQgZDZD'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
         } catch (error) {
             console.error('Error tracking event:', error);
             return null;
