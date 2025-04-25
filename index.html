@@ -721,8 +721,17 @@
                     });
                 }
 
-                // Always use Conversion API for purchase events
+                // Only use Conversion API for purchase events
                 if (eventName === 'Purchase') {
+                    // Disable pixel purchase tracking
+                    if (typeof fbq === 'function') {
+                        fbq('track', 'Purchase', {
+                            ...eventData,
+                            phone: hashedPhone,
+                            _disabled: true // This will prevent the pixel from sending the purchase event
+                        });
+                    }
+
                     const response = await fetch('/.netlify/functions/conversion-api', {
                         method: 'POST',
                         headers: {
