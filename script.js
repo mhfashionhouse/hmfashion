@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function trackFBEvent(eventName, params, uniqueIdentifier = '') {
         try {
             if (typeof fbq !== 'function') {
-                console.warn('Facebook Pixel not loaded');
+                console.error('Facebook Pixel not loaded');
                 return;
             }
 
@@ -70,8 +70,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Skip pixel tracking for Purchase events to avoid duplication
+            // For all events except Purchase, use pixel tracking
             if (eventName !== 'Purchase') {
+                console.log(`Tracking ${eventName} event with params:`, eventParams);
                 fbq('track', eventName, eventParams);
                 trackedEvents.add(eventKey);
             }
@@ -773,4 +774,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
     }
+
+    // Test pixel is working
+    console.log('Testing pixel...');
+    fbq('track', 'ViewContent', {
+        content_type: 'product_group',
+        content_name: 'বোরকা কালেকশন'
+    });
 });

@@ -16,15 +16,6 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <!-- Meta Pixel Code -->
     <script>
-    // Add SHA256 hashing function
-    async function sha256(text) {
-        const msgBuffer = new TextEncoder().encode(text);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return hashHex;
-    }
-
     !function(f,b,e,v,n,t,s) {
         if(f.fbq)return;
         n=f.fbq=function(){n.callMethod ? n.callMethod.apply(n,arguments) : n.queue.push(arguments)};
@@ -35,10 +26,20 @@
         s.parentNode.insertBefore(t,s)
     }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
     
-    // Initialize pixel only once
+    // Initialize pixel
     fbq('init', '1878610126217492');
-    // Track PageView only once
+    
+    // Track PageView
     fbq('track', 'PageView');
+    
+    // Add SHA256 hashing function
+    async function sha256(text) {
+        const msgBuffer = new TextEncoder().encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+    }
     </script>
     <noscript>
         <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1878610126217492&ev=PageView&noscript=1"/>
@@ -49,21 +50,13 @@
     <script>
         window.fbAsyncInit = function() {
             FB.init({
-                appId: '1878610126217492', // Using the same ID as the pixel
+                appId: '1878610126217492',
                 cookie: true,
                 xfbml: true,
                 version: 'v17.0'
             });
-
-            // Try to get Facebook Login ID on page load
-            FB.getLoginStatus(function(response) {
-                if (response.status === 'connected') {
-                    localStorage.setItem('fb_login_id', response.authResponse.userID);
-                }
-            });
         };
 
-        // Load Facebook SDK
         (function(d, s, id) {
             var js, fjs = d.getElementsByTagName(s)[0];
             if (d.getElementById(id)) return;
